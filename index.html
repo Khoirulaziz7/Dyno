@@ -1,1 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dino Run + Rewarded Ad</title>
+<style>
+    body { margin:0; overflow:hidden; background:#f7f7f7; font-family:sans-serif; }
+    #scoreBoard { position:absolute; top:20px; right:20px; font-size:24px; font-weight:bold; }
+    canvas { display:block; background:#f7f7f7; }
+    #msg { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); 
+           background:#fff; padding:30px; border-radius:10px; text-align:center; display:none; box-shadow:0 5px 15px rgba(0,0,0,0.3); }
+    .btn { padding:10px 20px; font-size:18px; cursor:pointer; border:none; background:#27ae60; color:white; border-radius:5px; margin-top:10px; display:inline-block; }
+</style>
+</head>
+<body>
 
+<div id="scoreBoard">Score: 0</div>
+<div id="msg">
+    <h2 id="msgTitle">READY?</h2>
+    <p id="msgText">Press SPACE / TAP to jump</p>
+    <button class="btn" onclick="startGame()">START</button>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Sounds -->
+<audio id="jumpSound" src="https://actions.google.com/sounds/v1/cartoon/slide_whistle_to_drum_hit.ogg"></audio>
+<audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
+
+<script>
+// ===== Canvas & Game Variables =====
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let gameSpeed = 7;
+let gravity = 0.7;
+let jumpPower = -15;
+let score = 0;
+let gameRunning = false;
+let frameCount = 0;
+
+let dino = { x:50, y:canvas.height-100, w:50, h:50, dy:0, onGround:true, frame:0 };
+let obstacles = [];
+let groundOffset = 0;
+
+// ===== Dino Animasi 4 Frame =====
+const dinoFrames = [
+    { legOffset:0 },
+    { legOffset:4 },
+    { legOffset:0 },
+    { legOffset:-4 }
+];
+
+// ===== Fungsi Obstacles =====
+function createObstacle() {
+    const h = Math.random()*50 + 30;
+    obstacles.push({ x:canvas.width, y:canvas.height - h - 50, w:20, h:h });
+}
+
+// ===== Reset Game =====
+function resetGame() {
+    dino.y = canvas.height-100;
+    dino.dy = 0;
+    dino.onGround = true;
+    obstacles = [];
+    score = 0;
+    gameSpeed = 7;
+    groundOffset = 0;
+    frameCount = 0;
+    dino.frame = 0;
+}
+
+// ===== Draw Dino =====
+function drawDino() {
+    const df = dinoFrames[dino.frame];
+    // Body
+    ctx.fillStyle = "#555";
+    ctx.fillRect(dino.x, dino.y, dino.w, dino.h - 10);
+    // Legs
+    ctx.fillStyle = "#333";
+    ctx.fillRect(dino.x+5, dino.y + dino.h - 10 + df.legOffset, 10, 10);
+    ctx.fillRect(dino.x+35, dino.y + dino.h - 10 - df.legOffset, 10, 10);
+}
+
+// ===== Update Game =====
+function update() {
+    if(!gameRunning) return;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    frameCount++;
+
+    // ===== Ground =====
+    groundOffset -= gameSpeed;
+    if(groundOffset < -canvas.width) groundOffset = 0;
+    ctx.fillStyle="#888";
+    ctx.fillRect(groundOffset, canvas.height-50, canvas.width*2, 50);
+
+    // ===== Dino Physics =====
+    dino.dy += gravity;
+    dino.y += dino.dy;
+    if(dino.y + dino.h > canvas.height-50) {
+        dino.y = canvas.height-50 - dino.h;
+        dino.dy = 0;
+        dino.onGround = true;
+    }
+
+    // ===== Dino Animasi =====
+    if(dino.onGround && frameCount % 5 === 0) {
+        dino.frame = (dino.frame + 1) % dinoFrames.length;
+    }
+    drawDino();
+
+    // ===== Obstacles =====
+    if(obstacles.length===0 || canvas.width - obstacles[obstacles.length-1].x > 300) createObstacle();
+    obstacles.forEach((obs,i)=>{
+        obs.x -= gameSpeed;
+        ctx.fillStyle="#228B22";
+        ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+
+        // Collision
+        if(dino.x < obs.x + obs.w &&
+           dino.x + dino.w > obs.x &&
+           dino.y < obs.y + obs.h &&
+           dino.y + dino.h > obs.y) {
+            document.getElementById('hitSound').play();
+            offerAdContinue();
+        }
+    });
+    obstacles = obstacles.filter(o=>o.x+o.w>0);
+
+    // ===== Score =====
+    score++;
+    document.getElementById('scoreBoard').innerText = "Score: "+score;
+
+    // Speed up
+    if(score % 500 === 0) gameSpeed += 0.5;
+
+    requestAnimationFrame(update);
+}
+
+// ===== Start Game =====
+function startGame() {
+    resetGame();
+    gameRunning = true;
+    document.getElementById('msg').style.display = 'none';
+    update();
+}
+
+// ===== Offer Ad =====
+function offerAdContinue() {
+    gameRunning = false;
+    document.getElementById('msg').style.display='block';
+    document.getElementById('msgTitle').innerText="GAME OVER";
+    document.getElementById('msgText').innerHTML = `
+        Score: ${score}<br>
+        <button class="btn" onclick="showRewardedAd()">Watch Ad to Continue</button>
+    `;
+}
+
+// ===== Rewarded Ad =====
+function showRewardedAd() {
+    // Memanggil rewarded interstitial Intinitial Monetag
+    show_10493515().then(() => {
+        alert('You watched the ad! Continue game.');
+        continueGame();
+    }).catch(err => {
+        console.error("Ad failed:", err);
+        alert("Ad not available.");
+    });
+}
+
+// ===== Continue Game setelah ad =====
+function continueGame() {
+    // Reset Dino tapi tetap simpan score
+    dino.y = canvas.height-100;
+    dino.dy = 0;
+    dino.onGround = true;
+    obstacles = [];
+    gameRunning = true;
+    document.getElementById('msg').style.display = 'none';
+    update();
+}
+
+// ===== Jump =====
+function jump() {
+    if(dino.onGround){
+        dino.dy = jumpPower;
+        dino.onGround = false;
+        document.getElementById('jumpSound').play();
+    }
+}
+
+document.addEventListener('keydown', e => { if(e.code==='Space') jump(); });
+document.addEventListener('touchstart', jump);
+
+showMsg("DINO RUN", "Press SPACE / TAP to jump");
+function showMsg(title,text){
+    document.getElementById('msg').style.display='block';
+    document.getElementById('msgTitle').innerText = title;
+    document.getElementById('msgText').innerText = text;
+}
+
+</script>
+</body>
+  </html>
